@@ -1,162 +1,161 @@
-# Deployment Log — Phase 1
+# Deployment Log — Full Record
 
-Full step-by-step record of every action taken to deploy the Wonzystore e-commerce infrastructure on AWS.
-
-**Date:** June 13, 2026
 **Engineer:** Mozypelly
 **AWS Account:** Mozytech (522196680583)
 **Region:** Asia Pacific (Sydney) — ap-southeast-2
+**Started:** June 13, 2026
+**Phase 2 Complete:** June 16, 2026
 
 ---
 
-## Step 1 — AWS Account Creation
+## Phase 1 — Infrastructure Setup (June 13, 2026)
 
-- Created new AWS account at aws.amazon.com
-- Used dedicated business email: wonzstore.admin@gmail.com
+### AWS Account
+- Created dedicated AWS account: wonzstore.admin@gmail.com
 - Account name: Mozytech
-- Selected Basic Support plan (free)
-- Card verified with $1 temporary charge (auto-refunded)
+- Selected Basic Support (free)
+- Region set to ap-southeast-2 (Sydney)
 
----
+### Security
+- MFA enabled on root account (Google Authenticator)
+- IAM user created: wonzystore-admin
+- MFA enabled on IAM user
+- AdministratorAccess policy attached
+- Account alias: wonzystore
+- Login URL: https://wonzystore.signin.aws.amazon.com/console
 
-## Step 2 — Account Security
+### Billing
+- Zero-spend budget alert configured
+- Cost Explorer activated
 
-### Root account MFA
+### EC2 Instance
 ```
-IAM Console > Security Credentials > Assign MFA Device
-Type: Authenticator app (Google Authenticator)
-Scanned QR code > entered two consecutive 6-digit codes
-Result: MFA active on root account
-```
-
-### IAM user creation
-```
-IAM Console > Users > Create User
-Username: wonzystore-admin
-Console access: enabled
-Password: custom (saved securely)
-Policy: AdministratorAccess
-MFA: enabled (Google Authenticator)
-```
-
-### Account alias
-```
-IAM Dashboard > Account Alias > Create
-Alias: wonzystore
-Login URL: https://wonzystore.signin.aws.amazon.com/console
-```
-
----
-
-## Step 3 — Billing Protection
-
-### Zero-spend budget
-```
-Billing > Budgets > Create Budget
-Template: Zero spend budget
-Name: AWS-Zero-Spend-Alert
-Email: wonzstore.admin@gmail.com
-Threshold: $0.01
-```
-
-### Cost Explorer activated
-```
-Billing > Cost Explorer > Enable
-Status: Active (data populates within 24 hours)
-```
-
----
-
-## Step 4 — EC2 Instance Launch
-
-### Configuration
-```
-EC2 Console > Launch Instance
 Name:          wonzystore-webserver
 AMI:           Ubuntu Server 24.04 LTS (ami-020728ad6199d7fa0)
-Instance type: t2.micro (free tier)
+Instance type: t2.micro
 Storage:       20 GiB gp3
-Key pair:      wonzystore-keypair (RSA, .pem)
+Key pair:      wonzystore-keypair.pem
+Instance ID:   i-0f4706a0d42cb33f7
+Public IP:     3.107.29.242
+Private IP:    172.31.0.72
 ```
 
-### Key pair storage on Mac
+### Key pair setup (Mac)
 ```bash
 mkdir -p ~/.ssh
 mv ~/Downloads/wonzystore-keypair.pem ~/.ssh/
 chmod 400 ~/.ssh/wonzystore-keypair.pem
 ```
 
-### Security group — wonzystore-sg
+### Security Group — wonzystore-sg
 ```
-Rule 1: SSH    TCP  22   Source: Admin IP only (105.127.13.11/32)
-Rule 2: HTTP   TCP  80   Source: 0.0.0.0/0
-Rule 3: HTTPS  TCP  443  Source: 0.0.0.0/0
-```
-
-### Instance details
-```
-Instance ID:  i-0f4706a0d42cb33f7
-Public IP:    3.107.29.242
-Private IP:   172.31.0.72
-State:        Running
+SSH    TCP  22    Admin IPs only
+HTTP   TCP  80    0.0.0.0/0
+HTTPS  TCP  443   0.0.0.0/0
 ```
 
----
-
-## Step 5 — Server Configuration
-
-### SSH connection
+### Server Setup
 ```bash
 ssh -i ~/.ssh/wonzystore-keypair.pem ubuntu@3.107.29.242
-```
-
-### System update
-```bash
 sudo apt update && sudo apt upgrade -y
-```
-
-### Nginx installation
-```bash
 sudo apt install nginx -y
-sudo systemctl start nginx
 sudo systemctl enable nginx
-sudo systemctl status nginx
-# Result: active (running)
-```
-
-### UFW firewall
-```bash
 sudo apt install ufw -y
 sudo ufw allow OpenSSH
 sudo ufw allow 'Nginx Full'
 sudo ufw enable
-sudo ufw status
 ```
-
-### UFW status output
-```
-Status: active
-To                  Action    From
---                  ------    ----
-OpenSSH             ALLOW     Anywhere
-Nginx Full          ALLOW     Anywhere
-OpenSSH (v6)        ALLOW     Anywhere (v6)
-Nginx Full (v6)     ALLOW     Anywhere (v6)
-```
-
-### Verification
-- Opened http://3.107.29.242 in browser
-- Result: Nginx welcome page confirmed
-- Server is live and publicly accessible
 
 ---
 
-## Phase 2 — Pending
+## Phase 2 — Application Deployment (June 14-16, 2026)
 
-Waiting on developer to confirm tech stack, then proceeding with:
-- RDS database provisioning
-- Backend stack installation on EC2
-- Application code deployment
-- Domain and SSL setup
-- AWS WAF with African IP geo-blocking
-- S3 and CloudFront configuration
+### Developer Access
+```bash
+sudo adduser developer
+sudo usermod -aG sudo developer
+sudo mkdir -p /home/developer/.ssh
+sudo touch /home/developer/.ssh/authorized_keys
+sudo chmod 700 /home/developer/.ssh
+sudo chmod 600 /home/developer/.ssh/authorized_keys
+sudo chown -R developer:developer /home/developer/.ssh
+echo "SSH_PUBLIC_KEY" | sudo tee -a /home/developer/.ssh/authorized_keys
+```
+
+### RDS PostgreSQL Database
+```
+Engine:     PostgreSQL 18.3
+Instance:   db.t3.micro
+Storage:    20 GiB gp3
+Endpoint:   wonzystore-db.c5o2cscwmnm5.ap-southeast-2.rds.amazonaws.com
+Port:       5432
+Username:   wonzyadmin
+Access:     Private VPC only
+Cost:       ~$23.20/month
+```
+
+### Application Port
+```
+Port 8080 opened in security group for Django/Gunicorn
+```
+
+### CI/CD Pipeline — GitHub Actions
+```
+Repo: github.com/Olalekan2040-slack/wonzay
+Branch: master
+Trigger: push to master
+Secrets: EC2_HOST, EC2_USER, EC2_SSH_KEY
+```
+
+Deploy key setup:
+```bash
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_actions_deploy
+cat ~/.ssh/github_actions_deploy.pub >> ~/.ssh/authorized_keys
+```
+
+### African IP Geo-blocking
+```bash
+# Install packages
+sudo apt install nginx-extras geoip-database -y
+sudo apt install geoipupdate -y
+sudo apt install libnginx-mod-http-geoip2 -y
+
+# Configure MaxMind
+# Edit /etc/GeoIP.conf with AccountID and LicenseKey
+sudo geoipupdate
+
+# Auto-update weekly via cron
+0 2 * * 1 geoipupdate && systemctl reload nginx
+```
+
+nginx.conf additions:
+```nginx
+geoip2 /var/lib/GeoIP/GeoLite2-Country.mmdb {
+    auto_reload 5m;
+    $geoip2_data_country_code country iso_code;
+}
+
+map $geoip2_data_country_code $blocked_country {
+    default 0;
+    NG 1; GH 1; ZA 1; KE 1; EG 1; ET 1; TZ 1;
+    UG 1; DZ 1; MA 1; CM 1; CI 1; SN 1; ZW 1;
+    ZM 1; MZ 1; AO 1; SD 1; TN 1; LY 1;
+}
+```
+
+sites-enabled/default blocking rule:
+```nginx
+set $block 0;
+if ($blocked_country) { set $block 1; }
+if ($remote_addr = ADMIN_IP) { set $block 0; }
+if ($block = 1) { return 403 "Access denied."; }
+```
+
+---
+
+## Phase 3 — Pending
+
+- Domain name purchase
+- SSL certificate (Let's Encrypt)
+- Cloudflare CDN + WAF
+- Enhanced geo-blocking via Cloudflare
